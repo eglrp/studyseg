@@ -29,15 +29,15 @@ from dataloaders import custom_transforms as tr
 gpu_id = 0
 print('Using GPU: {} '.format(gpu_id))
 # Setting parameters
-use_sbd = False  # Whether to use SBD dataset
-nEpochs = 300  # Number of epochs for training
+use_sbd = True  # Whether to use SBD dataset
+nEpochs = 75  # Number of epochs for training
 resume_epoch = 0   # Default is 0, change if want to resume
 
 p = OrderedDict()  # Parameters to include in report
 p['trainBatch'] = 4  # Training batch size
 testBatch = 4  # Testing batch size
-useTest = False  # See evolution of the test set when training
-nTestInterval = 5 # Run on test set every nTestInterval epochs
+useTest = True  # See evolution of the test set when training
+nTestInterval = 1 # Run on test set every nTestInterval epochs
 snapshot = 5  # Store a model every snapshot epochs
 p['nAveGrad'] = 1  # Average the gradient of several iterations
 p['lr'] = 1e-7  # Learning rate
@@ -98,8 +98,8 @@ if resume_epoch != nEpochs:
         tr.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
         tr.ToTensor()])
 
-    voc_train = pascal.VOCSegmentation(split='train', transform=composed_transforms_tr)
-    voc_val = pascal.VOCSegmentation(split='val', transform=composed_transforms_ts)
+    voc_train = pascal.VOCSegmentation(split='train', shuffle = True, transform=composed_transforms_tr)
+    voc_val = pascal.VOCSegmentation(split='val', shuffle = False, transform=composed_transforms_ts)
 
     if use_sbd:
         print("Using SBD dataset")
@@ -115,8 +115,12 @@ if resume_epoch != nEpochs:
 
     num_img_tr = len(trainloader)
     num_img_ts = len(testloader)
-    running_loss_tr = 0.0
-    running_loss_ts = 0.0
+    running_loss = 0.0
+    running_acc = 0.0
+    running_miou = 0.0
+    testing_loss = 0.0
+    testing_acc = 0.0
+    testing_miou = 0.0
     aveGrad = 0
     global_step = 0
     print("Training Network")
@@ -144,16 +148,27 @@ if resume_epoch != nEpochs:
             outputs = net.forward(inputs)
 
             loss = criterion(outputs, labels, size_average=False, batch_average=True)
-            running_loss_tr += loss.item()
+            running_loss += loss.item()
 
+            pred = torch.max(outputs, 1)[1]
+            total_acc, total_miou = utils.get_iou(pred.cpu().numpy(), labels.cpu().numpy())
+            running_acc += total_acc
+            running_miou += total_miou
             # Print stuff
-            if ii % print_num  == (print_num - 1):
-                running_loss_tr = running_loss_tr / print_num
+            if ii % print_num  == (print_num - 1) or ii == num_img_tr-1:
+                running_loss = running_loss / print_num
+                running_acc  = running_acc  / print_num
+                running_miou = running_miou / print_num
                 stop_time = timeit.default_timer()
                 
-                writer.add_scalar('data/total_loss_epoch', running_loss_tr, epoch)
-                print('Epoch: %d, numImages: %5d ' % (epoch, ii * p['trainBatch'] + inputs.data.shape[0]) + ' Loss: %f ' % running_loss_tr + " Execution time: " + str(stop_time - start_time))
-                running_loss_tr = 0
+                writer.add_scalar('data/training_loss', running_loss, epoch)
+                writer.add_scalar('data/training_acc', running_acc, epoch)
+                writer.add_scalar('data/training_miou', running_miou, epoch)
+                print('Epoch: %d, numImages: %5d ' % (epoch, ii * p['trainBatch'] + inputs.data.shape[0]) + ' Loss: %f ' % running_loss + " Execution time: " + str(stop_time - start_time)+' acc: %f '%running_acc + ' miou: %f '%running_miou)
+                running_loss = 0
+                running_acc = 0
+                running_miou = 0
+                #break
 
             # Backward the averaged gradient
             loss /= p['nAveGrad']
@@ -175,7 +190,7 @@ if resume_epoch != nEpochs:
                 writer.add_image('Predicted label', grid_image, global_step)
                 grid_image = make_grid(utils.decode_seg_map_sequence(torch.squeeze(labels[:3], 1).detach().cpu().numpy()), 3, normalize=False, range=(0, 255))
                 writer.add_image('Groundtruth label', grid_image, global_step)
-
+            #break
         # Save the model
         if (epoch % snapshot) == snapshot - 1:
             torch.save(net.state_dict(), os.path.join(save_dir, 'models', modelName + '_epoch-' + str(epoch) + '.pth'))
@@ -183,7 +198,7 @@ if resume_epoch != nEpochs:
 
         # One testing epoch
         if useTest and epoch % nTestInterval == (nTestInterval - 1):
-            total_miou = 0.0
+            #total_miou = 0.0
             net.eval()
             for ii, sample_batched in enumerate(testloader):
                 inputs, labels = sample_batched['image'], sample_batched['label']
@@ -199,23 +214,26 @@ if resume_epoch != nEpochs:
                 predictions = torch.max(outputs, 1)[1]
 
                 loss = criterion(outputs, labels, size_average=False, batch_average=True)
-                running_loss_ts += loss.item()
+                testing_loss += loss.item()
 
-                total_miou += utils.get_iou(predictions, labels)
-
+                total_acc,total_miou = utils.get_iou(predictions.cpu().numpy(), labels.cpu().numpy())
+                testing_acc += total_acc
+                testing_miou += total_miou
                 # Print stuff
                 if ii % num_img_ts == num_img_ts - 1:
 
-                    miou = total_miou / (ii * testBatch + inputs.data.shape[0])
-                    running_loss_ts = running_loss_ts / num_img_ts
+                    testing_miou = testing_miou / num_img_ts#(ii * testBatch + inputs.data.shape[0])
+                    testing_loss = testing_loss / num_img_ts
+                    testing_acc  = testing_acc  / num_img_ts
 
+                    writer.add_scalar('data/testing_loss', testing_loss, epoch)
+                    writer.add_scalar('data/testing_miou', testing_miou, epoch)
+                    writer.add_scalar('data/testing_acc ', testing_acc  ,epoch)
                     print('Validation:')
-                    print('[Epoch: %d, numImages: %5d]' % (epoch, ii * testBatch + inputs.data.shape[0]))
-                    writer.add_scalar('data/test_loss_epoch', running_loss_ts, epoch)
-                    writer.add_scalar('data/test_miour', miou, epoch)
-                    print('Loss: %f' % running_loss_ts)
-                    print('MIoU: %f\n' % miou)
-                    running_loss_ts = 0
+                    print('[Epoch: %d, numImages: %5d] ' % (epoch, ii * testBatch + inputs.data.shape[0]) + ' Loss: %f ' % testing_loss +' Acc: %f' %testing_acc+' MIoU: %f\n ' % testing_miou)
+                    testing_loss = 0
+                    testing_acc = 0
+                    testing_miou = 0
 
 
     writer.close()

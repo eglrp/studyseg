@@ -1,0 +1,32 @@
+import cv2
+import numpy
+import os
+
+def mkdir(path):
+ 
+	folder = os.path.exists(path)
+ 
+	if not folder:                   
+		os.makedirs(path)            
+		print "---  new folder...  ---"
+		print "---  OK  ---"
+ 
+	else:
+		print "---  There is this folder!  ---"
+
+dataset_root1 = '~/data/datasets/VOC/VOCdevkit/VOC2012'
+
+filelist1 = os.path.join(dataset_root , 'ImageSets/Segmentation/trainval.txt')
+
+path_new = os.path.join(dataset_root1 + 'SegmentationEdge')
+
+mkdir (path_new)
+
+with open(filelist1,'r') as f:
+    lines = f.read().splitlines()
+
+for line in lines:
+    origin = os.path.join(dataset_root1 , line + '.png')
+    assert os.path.isfile(origin)
+    print origin.shape()
+    break

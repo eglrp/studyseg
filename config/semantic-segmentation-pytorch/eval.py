@@ -152,9 +152,9 @@ if __name__ == '__main__':
 
     # Path related arguments
     parser.add_argument('--list_val',
-                        default='./data/validation.odgt')
+                        default='/home/cuishuhao/data/datasets/scene/validation.odgt')
     parser.add_argument('--root_dataset',
-                        default='./data/')
+                        default='/home/cuishuhao/data/datasets/scene/')
 
     # Data related arguments
     parser.add_argument('--num_val', default=-1, type=int,

@@ -24,6 +24,7 @@ def train(segmentation_module, iterator, optimizers, history, epoch, args):
     ave_acc = AverageMeter()
 
     segmentation_module.train(not args.fix_bn)
+    segmentation_module.zero_grad()
 
     # main loop
     tic = time.time()
@@ -31,7 +32,7 @@ def train(segmentation_module, iterator, optimizers, history, epoch, args):
         batch_data = next(iterator)
         data_time.update(time.time() - tic)
 
-        segmentation_module.zero_grad()
+        #segmentation_module.zero_grad()
 
         # forward pass
         loss, acc = segmentation_module(batch_data)
@@ -40,9 +41,10 @@ def train(segmentation_module, iterator, optimizers, history, epoch, args):
 
         # Backward
         loss.backward()
-        for optimizer in optimizers:
-            optimizer.step()
-
+        if i % args.update_num == args.update_num -1 :
+            for optimizer in optimizers:
+                optimizer.step()
+                segmentation_module.zero_grad()
         # measure elapsed time
         batch_time.update(time.time() - tic)
         tic = time.time()
@@ -75,7 +77,6 @@ def checkpoint(nets, history, args, epoch_num):
     print('Saving checkpoints...')
     (net_encoder, net_decoder, crit) = nets
     suffix_latest = 'epoch_{}.pth'.format(epoch_num)
-
     dict_encoder = net_encoder.state_dict()
     dict_decoder = net_decoder.state_dict()
 
@@ -235,6 +236,8 @@ if __name__ == '__main__':
     # optimization related arguments
     parser.add_argument('--num_gpus', default=8, type=int,
                         help='number of gpus to use')
+    parser.add_argument('--update_num', default=4, type=int,
+                        help='number  to update')
     parser.add_argument('--batch_size_per_gpu', default=3, type=int,
                         help='input batch size')
     parser.add_argument('--num_epoch', default=20, type=int,

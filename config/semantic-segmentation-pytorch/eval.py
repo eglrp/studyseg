@@ -161,7 +161,7 @@ if __name__ == '__main__':
                         help='number of images to evalutate')
     parser.add_argument('--num_class', default=150, type=int,
                         help='number of classes')
-    parser.add_argument('--batch_size', default=1, type=int,
+    parser.add_argument('--batch_size', default=10, type=int,
                         help='batchsize. current only supports 1')
     parser.add_argument('--imgSize', default=[450], nargs='+', type=int,
                         help='list of input image sizes.'

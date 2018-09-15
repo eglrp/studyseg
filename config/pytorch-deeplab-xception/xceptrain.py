@@ -33,8 +33,8 @@ nEpochs = 100  # Number of epochs for training
 resume_epoch = 0   # Default is 0, change if want to resume
 
 p = OrderedDict()  # Parameters to include in report
-p['trainBatch'] = 6  # Training batch size
-testBatch = 6  # Testing batch size
+p['trainBatch'] = 4  # Training batch size
+testBatch = 4  # Testing batch size
 useTest = True  # See evolution of the test set when training
 nTestInterval = 1 # Run on test set every nTestInterval epochs
 snapshot = 10  # Store a model every snapshot epochs
@@ -43,8 +43,8 @@ p['lr'] = 1e-7  # Learning rate
 p['wd'] = 5e-4  # Weight decay
 p['momentum'] = 0.9  # Momentum
 p['epoch_size'] = 2  # How many epochs to change learning rate
-backbone = 'resnet' # Use xception or resnet as feature extractor,
-print_num =20
+backbone = 'xception' # Use xception or resnet as feature extractor,
+print_num =25
 
 save_dir_root = os.path.join(os.path.dirname(os.path.abspath(__file__)))
 exp_name = os.path.dirname(os.path.abspath(__file__)).split('/')[-1]

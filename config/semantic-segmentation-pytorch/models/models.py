@@ -3,7 +3,7 @@ import torch.nn as nn
 import torchvision
 from . import resnet, resnext
 from lib.nn import SynchronizedBatchNorm2d
-
+#from utils import intersectionAndUnion 
 
 class SegmentationModuleBase(nn.Module):
     def __init__(self):
@@ -12,6 +12,9 @@ class SegmentationModuleBase(nn.Module):
     def pixel_acc(self, pred, label):
         _, preds = torch.max(pred, dim=1)
         valid = (label >= 0).long()
+        #print(preds.shape)
+        #print(label.shape)
+        #from IPython import embed;embed();exit();
         acc_sum = torch.sum(valid * (preds == label).long())
         pixel_sum = torch.sum(valid)
         acc = acc_sum.float() / (pixel_sum.float() + 1e-10)
@@ -26,15 +29,17 @@ class SegmentationModule(SegmentationModuleBase):
         self.crit = crit
         self.deep_sup_scale = deep_sup_scale
 
-    def forward(self, feed_dict, segSize=None):#, *
+    def forward(self, feed_dict, num_classes=150, segSize=None):#, *
         if segSize is None: # training
+            #from IPython import embed;embed();
+            label = feed_dict[0]['seg_label'].cuda()
             if self.deep_sup_scale is not None: # use deep supervision technique
                 #from IPython import embed;embed();exit();
                 (pred, pred_deepsup) = self.decoder(self.encoder(feed_dict[0]['img_data'].cuda(), return_feature_maps=True))
             else:
                 pred = self.decoder(self.encoder(feed_dict[0]['img_data'].cuda(), return_feature_maps=True))
-            label = feed_dict[0]['seg_label'].cuda() 
             loss = self.crit(pred, label)
+            #from IPython import embed;embed();exit();
             if self.deep_sup_scale is not None:
                 loss_deepsup = self.crit(pred_deepsup, label)
                 loss = loss + loss_deepsup * self.deep_sup_scale

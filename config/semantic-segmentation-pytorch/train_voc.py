@@ -9,7 +9,9 @@ from distutils.version import LooseVersion
 import torch
 import torch.nn as nn
 # Our libs
-from dataset import TrainDataset
+import dataset_sbd as sbd
+import dataset_voc as voc 
+from combine_dbs import CombineDBs 
 from models import ModelBuilder, SegmentationModule
 from utils import AverageMeter
 from lib.nn import UserScatteredDataParallel, user_scattered_collate, patch_replication_callback
@@ -33,9 +35,9 @@ def train(segmentation_module, iterator, optimizers, history, epoch, args):
         data_time.update(time.time() - tic)
 
         #segmentation_module.zero_grad()
-
+        #from IPython import embed;embed();exit();
         # forward pass
-        loss, acc = segmentation_module(batch_data)
+        loss, acc = segmentation_module(batch_data,num_classes = args.num_class)
         loss = loss.mean()
         acc = acc.mean()
 
@@ -164,13 +166,17 @@ def main(args):
             net_encoder, net_decoder, crit)
 
     # Dataset and Loader
-    dataset_train = TrainDataset(
-        args.list_train, args, batch_per_gpu=args.batch_size_per_gpu)
-
+    dataset_voc = voc.TrainDataset(
+        args, batch_per_gpu=args.batch_size_per_gpu)
+    dataset_sbd = sbd.TrainDataset(
+        args, batch_per_gpu=args.batch_size_per_gpu)
+    dataset_train = CombineDBs([dataset_voc,dataset_sbd])
+    #dataset_train = sbd.TrainDataset(
+    #        args, batch_per_gpu=args.batch_size_per_gpu)
     loader_train = torchdata.DataLoader(
         dataset_train,
         batch_size=args.num_gpus,  # we have modified data_parallel
-        shuffle=False,  # we do not use this param
+        shuffle=True,  # we do not use this param
         collate_fn=user_scattered_collate,
         num_workers=int(args.workers),
         drop_last=True,
@@ -212,7 +218,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     # Model related arguments
-    parser.add_argument('--id', default='baseline',
+    parser.add_argument('--id', default='vocdata',
                         help="a name for identifying the model")
     parser.add_argument('--arch_encoder', default='resnet50_dilated8',
                         help="architecture of net_encoder")
@@ -226,19 +232,15 @@ if __name__ == '__main__':
                         help='number of features between encoder and decoder')
 
     # Path related arguments
-    parser.add_argument('--list_train',
-                        default='/home/cuishuhao/data/datasets/scene/train.odgt')
-    parser.add_argument('--list_val',
-                        default='/home/cuishuhao/data/datasets/scene/validation.odgt')
     parser.add_argument('--root_dataset',
-                        default='/home/cuishuhao/data/datasets/scene/')
+                        default='/home/cuishuhao/data/datasets/VOC/')
 
     # optimization related arguments
     parser.add_argument('--num_gpus', default=1, type=int,
                         help='number of gpus to use')
-    parser.add_argument('--update_num', default=4, type=int,
+    parser.add_argument('--update_num', default=1, type=int,
                         help='number  to update')
-    parser.add_argument('--batch_size_per_gpu', default=2, type=int,
+    parser.add_argument('--batch_size_per_gpu', default=20, type=int,
                         help='input batch size')
     parser.add_argument('--num_epoch', default=20, type=int,
                         help='epochs to train for')
@@ -261,7 +263,7 @@ if __name__ == '__main__':
                         help='fix bn params')
 
     # Data related arguments
-    parser.add_argument('--num_class', default=150, type=int,
+    parser.add_argument('--num_class', default=21, type=int,
                         help='number of classes')
     parser.add_argument('--workers', default=16, type=int,
                         help='number of data loading workers')
@@ -295,7 +297,7 @@ if __name__ == '__main__':
 
     args.id += '-' + str(args.arch_encoder)
     args.id += '-' + str(args.arch_decoder)
-    args.id += '-ngpus' + str(args.num_gpus)
+    args.id += '-update' + str(args.update_num)
     args.id += '-batchSize' + str(args.batch_size)
     args.id += '-imgMaxSize' + str(args.imgMaxSize)
     args.id += '-paddingConst' + str(args.padding_constant)
